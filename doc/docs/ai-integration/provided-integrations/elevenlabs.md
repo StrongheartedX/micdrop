@@ -39,15 +39,16 @@ new MicdropServer(socket, {
 
 ### Options
 
-| Option          | Type                                                                     | Default               | Description                                         |
-| --------------- | ------------------------------------------------------------------------ | --------------------- | --------------------------------------------------- |
-| `apiKey`        | `string`                                                                 | Required              | Your ElevenLabs API key                             |
-| `voiceId`       | `string`                                                                 | Required              | ElevenLabs voice ID                                 |
-| `modelId`       | `'eleven_multilingual_v2' \| 'eleven_turbo_v2_5' \| 'eleven_flash_v2_5'` | `'eleven_turbo_v2_5'` | Model to use for speech synthesis                   |
-| `language`      | `string`                                                                 | Optional              | Language code (e.g., 'en', 'fr')                    |
-| `outputFormat`  | `TextToSpeechStreamRequestOutputFormat`                                  | `'pcm_16000'`         | Audio output format                                 |
-| `voiceSettings` | `VoiceSettings`                                                          | Optional              | Voice customization settings                        |
-| `retryDelay`    | `number`                                                                 | `500`                 | Delay in milliseconds between reconnection attempts |
+| Option          | Type                                                                     | Default               | Description                                            |
+| --------------- | ------------------------------------------------------------------------ | --------------------- | ------------------------------------------------------ |
+| `apiKey`        | `string`                                                                 | Required              | Your ElevenLabs API key                                |
+| `voiceId`       | `string`                                                                 | Required              | ElevenLabs voice ID                                    |
+| `modelId`       | `'eleven_multilingual_v2' \| 'eleven_turbo_v2_5' \| 'eleven_flash_v2_5'` | `'eleven_turbo_v2_5'` | Model to use for speech synthesis                      |
+| `language`      | `string`                                                                 | Optional              | Language code (e.g., 'en', 'fr')                       |
+| `outputFormat`  | `TextToSpeechStreamRequestOutputFormat`                                  | `'pcm_16000'`         | Audio output format                                    |
+| `voiceSettings` | `VoiceSettings`                                                          | Optional              | Voice customization settings                           |
+| `retryDelay`    | `number`                                                                 | `1000`                | Delay in milliseconds between reconnection attempts    |
+| `maxRetry`      | `number`                                                                 | `3`                   | Maximum number of reconnection attempts before failing |
 
 ### Voice Settings
 

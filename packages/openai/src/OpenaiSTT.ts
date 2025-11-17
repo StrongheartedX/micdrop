@@ -15,6 +15,7 @@ export interface OpenaiSTTOptions {
   prompt?: string
   transcriptionTimeout?: number
   retryDelay?: number
+  maxRetry?: number
 }
 
 const DEFAULT_MODEL = 'gpt-4o-transcribe'
@@ -23,13 +24,15 @@ const SAMPLE_RATE = 16000
 const BIT_DEPTH = 16
 const DEFAULT_TRANSCRIPTION_TIMEOUT = 4000
 const DEFAULT_RETRY_DELAY = 1000
+const DEFAULT_MAX_RETRY = 3
 
 export class OpenaiSTT extends STT {
   private socket?: WebSocket
   private initPromise: Promise<void>
   private reconnectTimeout?: NodeJS.Timeout
+  private retryCount = 0
   private transcriptionTimeout?: NodeJS.Timeout
-  private audioChunksPending: string[] = [] // Store Base64 encoded audio chunks
+  private audioChunksPending: Buffer[] = [] // Store audio chunks to send them again if reconnecting
   private ephemeralToken?: string
 
   constructor(private options: OpenaiSTTOptions) {
@@ -47,10 +50,9 @@ export class OpenaiSTT extends STT {
   transcribe(audioStream: Readable) {
     // Read audio stream and send to OpenAI
     audioStream.on('data', async (chunk: Buffer) => {
+      this.audioChunksPending.push(chunk)
       await this.initPromise
-      const base64Audio = chunk.toString('base64')
-      this.audioChunksPending.push(base64Audio)
-      this.sendAudioChunk(base64Audio)
+      this.sendAudioChunk(chunk)
       this.log(`Sent audio chunk (${chunk.byteLength} bytes)`)
     })
 
@@ -183,12 +185,12 @@ export class OpenaiSTT extends STT {
     })
   }
 
-  private sendAudioChunk(base64Audio: string) {
+  private sendAudioChunk(chunk: Buffer) {
     if (!this.socket) return
 
     const audioMessage = {
       type: 'input_audio_buffer.append',
-      audio: base64Audio,
+      audio: chunk.toString('base64'),
     }
 
     this.socket.send(JSON.stringify(audioMessage))
@@ -234,6 +236,13 @@ export class OpenaiSTT extends STT {
   }
 
   private reconnect() {
+    this.retryCount++
+    if (this.retryCount > (this.options.maxRetry ?? DEFAULT_MAX_RETRY)) {
+      this.log('Max retries reached, giving up')
+      this.emit('Failed', this.audioChunksPending)
+      return
+    }
+
     this.initPromise = new Promise((resolve) => {
       this.log('Reconnecting...')
       this.reconnectTimeout = setTimeout(() => {
@@ -241,6 +250,8 @@ export class OpenaiSTT extends STT {
         this.createTranscriptionSession()
           .then(() => this.initWS())
           .then(() => {
+            this.retryCount = 0
+
             // Send audio chunks again if reconnecting during transcription
             if (this.audioChunksPending.length > 0) {
               this.log('Sending audio chunks again')
@@ -263,9 +274,8 @@ export class OpenaiSTT extends STT {
     const numSamples = Math.round(SAMPLE_RATE * durationSeconds)
     const bytesPerSample = BIT_DEPTH / 8
     const silenceBuffer = Buffer.alloc(numSamples * bytesPerSample)
-    const base64Audio = silenceBuffer.toString('base64')
-    this.audioChunksPending.push(base64Audio)
-    this.sendAudioChunk(base64Audio)
+    this.audioChunksPending.push(silenceBuffer)
+    this.sendAudioChunk(silenceBuffer)
     this.log(
       `Sent ${durationSeconds * 1000}ms of silence (${silenceBuffer.byteLength} bytes) after stream end`
     )

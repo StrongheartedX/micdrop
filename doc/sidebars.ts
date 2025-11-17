@@ -86,6 +86,14 @@ const sidebars: SidebarsConfig = {
             'ai-integration/custom-integrations/custom-tts',
           ],
         },
+        {
+          type: 'category',
+          label: 'Fallback Strategies',
+          items: [
+            'ai-integration/fallback-strategies/stt-fallback',
+            'ai-integration/fallback-strategies/tts-fallback',
+          ],
+        },
       ],
     },
   ],

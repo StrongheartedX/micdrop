@@ -29,12 +29,13 @@ new MicdropServer(socket, {
 
 ## Options
 
-| Option                 | Type                                    | Default  | Description                                         |
-| ---------------------- | --------------------------------------- | -------- | --------------------------------------------------- |
-| `apiKey`               | `string`                                | Required | Your Gladia API key                                 |
-| `settings`             | `DeepPartial<GladiaLiveSessionPayload>` | Optional | Advanced configuration for Gladia live session      |
-| `transcriptionTimeout` | `number`                                | `4000`   | Timeout in milliseconds to wait for transcription   |
-| `retryDelay`           | `number`                                | `1000`   | Delay in milliseconds between reconnection attempts |
+| Option                 | Type                                    | Default  | Description                                            |
+| ---------------------- | --------------------------------------- | -------- | ------------------------------------------------------ |
+| `apiKey`               | `string`                                | Required | Your Gladia API key                                    |
+| `settings`             | `DeepPartial<GladiaLiveSessionPayload>` | Optional | Advanced configuration for Gladia live session         |
+| `transcriptionTimeout` | `number`                                | `4000`   | Timeout in milliseconds to wait for transcription      |
+| `retryDelay`           | `number`                                | `1000`   | Delay in milliseconds between reconnection attempts    |
+| `maxRetry`             | `number`                                | `3`      | Maximum number of reconnection attempts before failing |
 
 ## Configuration Settings
 

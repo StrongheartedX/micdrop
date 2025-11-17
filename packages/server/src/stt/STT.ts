@@ -4,6 +4,7 @@ import { Logger } from '../Logger'
 
 export interface STTEvents {
   Transcript: [string]
+  Failed: [Buffer[]]
 }
 
 export abstract class STT extends EventEmitter<STTEvents> {

@@ -1,9 +1,9 @@
 import { CartesiaTTS } from '@micdrop/cartesia'
 import { ElevenLabsTTS } from '@micdrop/elevenlabs'
-import { MockTTS } from '@micdrop/server'
+import { FallbackTTS, MockTTS } from '@micdrop/server'
 import path from 'path'
 
-export default {
+const text2speech = {
   // Mock
   mock: () =>
     new MockTTS([
@@ -27,4 +27,12 @@ export default {
       voiceId: process.env.CARTESIA_VOICE_ID || '',
       language: 'fr',
     }),
+
+  // Fallback
+  fallback: () =>
+    new FallbackTTS({
+      factories: [text2speech.elevenlabs, text2speech.cartesia],
+    }),
 }
+
+export default text2speech

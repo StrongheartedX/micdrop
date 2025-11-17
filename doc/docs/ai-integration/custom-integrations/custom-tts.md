@@ -8,6 +8,8 @@ The `TTS` class is the core abstraction for **text-to-speech** functionality in 
 - [CartesiaTTS](https://github.com/lonestone/micdrop/blob/main/packages/cartesia/src/CartesiaTTS.ts) from [@micdrop/cartesia](../provided-integrations/cartesia)
 - [MockTTS](https://github.com/lonestone/micdrop/blob/main/packages/server/src/tts/MockTTS.ts) for testing
 
+For automatic failover between multiple TTS providers, see [FallbackTTS](../fallback-strategies/tts-fallback).
+
 ## Overview
 
 The `TTS` class is an abstract base class that manages:
@@ -19,11 +21,11 @@ The `TTS` class is an abstract base class that manages:
 - Audio format conversion and optimization
 
 ```typescript
-export abstract class TTS {
+export abstract class TTS extends EventEmitter<TTSEvents> {
   public logger?: Logger
 
-  // Convert text stream to audio stream
-  abstract speak(textStream: Readable): Readable
+  // Convert text stream to audio (emits Audio event)
+  abstract speak(textStream: Readable): void
 
   // Cancel current speech generation
   abstract cancel(): void
@@ -34,6 +36,32 @@ export abstract class TTS {
   // Cleanup
   destroy(): void
 }
+```
+
+## Events
+
+The TTS class emits the following events:
+
+### Audio
+
+Emitted when an audio chunk is ready to be sent to the client.
+
+```typescript
+tts.on('Audio', (audioChunk: Buffer) => {
+  console.log('Received audio chunk:', audioChunk.length, 'bytes')
+  // Send to client
+})
+```
+
+### Failed
+
+Emitted when the TTS service fails after exhausting all retries. This event provides the buffered text chunks that were pending synthesis.
+
+```typescript
+tts.on('Failed', (textChunks: string[]) => {
+  console.error('TTS failed with', textChunks.length, 'pending text chunks')
+  // Handle failure (e.g., notify user, fallback to another TTS)
+})
 ```
 
 ## Abstract Methods

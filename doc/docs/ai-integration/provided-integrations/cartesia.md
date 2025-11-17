@@ -20,7 +20,7 @@ import { MicdropServer } from '@micdrop/server'
 
 const tts = new CartesiaTTS({
   apiKey: process.env.CARTESIA_API_KEY || '',
-  modelId: 'sonic-english', // Cartesia model ID
+  modelId: 'sonic-turbo', // Cartesia model ID
   voiceId: 'a0e99841-438c-4a64-b679-ae501e7d6091', // Voice ID
   language: 'en', // Optional: specify language
   speed: 'normal', // Optional: speech speed
@@ -35,14 +35,15 @@ new MicdropServer(socket, {
 
 ### Options
 
-| Option       | Type                           | Default  | Description                                         |
-| ------------ | ------------------------------ | -------- | --------------------------------------------------- |
-| `apiKey`     | `string`                       | Required | Your Cartesia API key                               |
-| `modelId`    | `string`                       | Required | Cartesia model ID to use                            |
-| `voiceId`    | `string`                       | Required | Voice ID for speech synthesis                       |
-| `language`   | `CartesiaLanguage`             | Optional | Language code for speech                            |
-| `speed`      | `'fast' \| 'normal' \| 'slow'` | Optional | Speech speed                                        |
-| `retryDelay` | `number`                       | `500`    | Delay in milliseconds between reconnection attempts |
+| Option       | Type                           | Default  | Description                                            |
+| ------------ | ------------------------------ | -------- | ------------------------------------------------------ |
+| `apiKey`     | `string`                       | Required | Your Cartesia API key                                  |
+| `modelId`    | `string`                       | Required | Cartesia model ID to use                               |
+| `voiceId`    | `string`                       | Required | Voice ID for speech synthesis                          |
+| `language`   | `CartesiaLanguage`             | Optional | Language code for speech                               |
+| `speed`      | `'fast' \| 'normal' \| 'slow'` | Optional | Speech speed                                           |
+| `retryDelay` | `number`                       | `1000`   | Delay in milliseconds between reconnection attempts    |
+| `maxRetry`   | `number`                       | `3`      | Maximum number of reconnection attempts before failing |
 
 ### Supported Languages
 
@@ -67,7 +68,7 @@ import { CartesiaTTS } from '@micdrop/cartesia'
 
 const tts = new CartesiaTTS({
   apiKey: 'your-cartesia-api-key',
-  modelId: 'sonic-english', // Or sonic-multilingual for multiple languages
+  modelId: 'sonic-turbo', // Or sonic-multilingual for multiple languages
   voiceId: 'your-preferred-voice-id',
   language: 'en',
   speed: 'normal',

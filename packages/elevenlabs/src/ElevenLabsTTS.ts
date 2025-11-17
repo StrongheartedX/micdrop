@@ -1,5 +1,5 @@
 import { TTS } from '@micdrop/server'
-import { PassThrough, Readable } from 'stream'
+import { Readable } from 'stream'
 import WebSocket from 'ws'
 import {
   DEFAULT_MODEL_ID,
@@ -13,17 +13,19 @@ import {
 
 const WS_INACTIVITY_TIMEOUT = 180
 const DEFAULT_RETRY_DELAY = 1000
+const DEFAULT_MAX_RETRY = 3
 
 export class ElevenLabsTTS extends TTS {
   private socket?: WebSocket
   private initPromise: Promise<void>
-  private audioStream?: PassThrough
+  private isProcessing = false
   private textEnded = false // Whether the text stream has ended
   private textSent = '' // Text sent to ElevenLabs
   private textBuffer = '' // Buffer of text to send to ElevenLabs
   private receivedAudioText = '' // Text of chunks received from ElevenLabs
   private keepAliveInterval?: NodeJS.Timeout
   private reconnectTimeout?: NodeJS.Timeout
+  private retryCount = 0
   private canceled = false
 
   constructor(private readonly options: ElevenLabsTTSOptions) {
@@ -37,18 +39,20 @@ export class ElevenLabsTTS extends TTS {
 
   speak(textStream: Readable) {
     this.canceled = false
-    this.audioStream?.end()
-    this.audioStream = new PassThrough()
+    this.isProcessing = true
     this.textEnded = false
     this.textBuffer = ''
     this.textSent = ''
     this.receivedAudioText = ''
 
     // Forward text chunks coming from the caller to ElevenLabs
-    textStream.on('data', async (chunk) => {
+    textStream.on('data', async (chunk: Buffer) => {
       if (this.canceled) return
+      const text = chunk.toString('utf-8').replace(/[\r\n ]+/g, ' ')
+      this.textSent += text
+
       await this.initPromise
-      const text = chunk.toString('utf-8').replace(/[\r\n]+/g, ' ')
+
       const spaceIndex = text.lastIndexOf(' ')
       if (spaceIndex === -1) {
         this.textBuffer += text
@@ -60,8 +64,7 @@ export class ElevenLabsTTS extends TTS {
 
     textStream.on('error', (error) => {
       this.log('Error in text stream, ending audio stream', error)
-      this.audioStream?.end()
-      this.audioStream = undefined
+      this.isProcessing = false
     })
 
     textStream.on('end', async () => {
@@ -77,18 +80,15 @@ export class ElevenLabsTTS extends TTS {
       this.socket?.send(JSON.stringify({ text: ' ', flush: true }))
       this.log('Flushed text')
     })
-
-    return this.audioStream
   }
 
   cancel() {
-    if (!this.audioStream) return
+    if (!this.isProcessing) return
     this.log('Cancel')
     this.canceled = true
     this.textSent = ''
     this.receivedAudioText = ''
-    this.audioStream.end()
-    this.audioStream = undefined
+    this.isProcessing = false
     this.socket?.send(JSON.stringify({ text: ' ', flush: true }))
   }
 
@@ -106,9 +106,7 @@ export class ElevenLabsTTS extends TTS {
       this.socket?.close(1000)
     }
     this.socket = undefined
-
-    this.audioStream?.end()
-    this.audioStream = undefined
+    this.isProcessing = false
 
     super.destroy()
   }
@@ -172,8 +170,8 @@ export class ElevenLabsTTS extends TTS {
         if (this.canceled) return
         try {
           this.onMessage(JSON.parse(event.data.toString()))
-        } catch (error) {
-          this.log('Error:', error)
+        } catch (error: any) {
+          this.log('message' in error ? error.message : error)
           this.log('Event data during error:', event.data)
         }
       })
@@ -181,23 +179,15 @@ export class ElevenLabsTTS extends TTS {
       socket.addEventListener('close', ({ code, reason }) => {
         this.socket?.removeAllListeners()
         this.socket = undefined
-
-        this.audioStream?.end()
-        this.audioStream = undefined
+        this.isProcessing = false
 
         if (this.keepAliveInterval) {
           clearInterval(this.keepAliveInterval)
           this.keepAliveInterval = undefined
         }
 
-        if (
-          // Error: voice_id_does_not_exist
-          code !== 1008
-        ) {
-          this.reconnect()
-        } else {
-          this.log('Connection closed', { code, reason })
-        }
+        this.log('Connection closed', { code, reason })
+        this.reconnect()
       })
     })
   }
@@ -208,11 +198,11 @@ export class ElevenLabsTTS extends TTS {
     }
     if ('isFinal' in message && message.isFinal) {
       this.log('Audio ended')
-      this.audioStream?.end()
-      this.audioStream = undefined
+      this.isProcessing = false
+      this.textSent = ''
     }
     if ('error' in message) {
-      throw new Error(message.error)
+      this.log('Error:', message.error)
     }
   }
 
@@ -238,7 +228,7 @@ export class ElevenLabsTTS extends TTS {
     }
 
     // Send to audio stream
-    this.audioStream?.write(chunk)
+    this.emit('Audio', chunk)
   }
 
   private fixIsFinal(message: ElevenLabsWebSocketAudioOutputMessage) {
@@ -249,17 +239,32 @@ export class ElevenLabsTTS extends TTS {
   }
 
   private sendTranscript(text: string) {
-    this.textSent += text
     this.socket?.send(JSON.stringify({ text, try_trigger_generation: true }))
     this.log(`Sent transcript: "${text}"`)
   }
 
   private reconnect() {
+    this.retryCount++
+    if (this.retryCount > (this.options.maxRetry ?? DEFAULT_MAX_RETRY)) {
+      this.log('Max retries reached, giving up')
+      this.emit('Failed', [this.textSent])
+      return
+    }
+
     this.initPromise = new Promise((resolve) => {
       this.log('Reconnecting...')
       this.reconnectTimeout = setTimeout(() => {
         this.reconnectTimeout = undefined
         this.initWS()
+          .then(() => {
+            this.retryCount = 0
+
+            // Send text chunks again if reconnecting
+            if (this.textSent.length > 0) {
+              this.log('Sending text chunks again')
+              this.sendTranscript(this.textSent)
+            }
+          })
           .then(resolve)
           .catch((error) => {
             this.log('Reconnection error:', error)

@@ -11,6 +11,7 @@ export interface ElevenLabsTTSOptions {
   outputFormat?: TextToSpeechStreamRequestOutputFormat
   voiceSettings?: VoiceSettings
   retryDelay?: number
+  maxRetry?: number
 }
 
 export const DEFAULT_MODEL_ID = 'eleven_turbo_v2_5'

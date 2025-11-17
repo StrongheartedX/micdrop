@@ -42,7 +42,10 @@ export class MicdropServer {
     this.log(`Call started`)
 
     // Setup STT
-    this.config.stt.on('Transcript', this.onTranscript)
+    this.config.stt.on('Transcript', this.onTranscriptSTT)
+
+    // Setup TTS
+    this.config.tts.on('Audio', this.onAudioTTS)
 
     // Setup agent
     this.config.agent.on('Message', (message) =>
@@ -208,7 +211,7 @@ export class MicdropServer {
     }
   }
 
-  private onTranscript = async (transcript: string) => {
+  private onTranscriptSTT = async (transcript: string) => {
     if (!this.config) return
 
     // Skip answer if transcript is empty
@@ -226,6 +229,12 @@ export class MicdropServer {
       this.cancel()
       this.answer()
     }
+  }
+
+  private onAudioTTS = (audio: Buffer) => {
+    if (!this.socket) return
+    this.log(`Send audio chunk (${audio.byteLength} bytes)`)
+    this.socket.send(audio)
   }
 
   private sendFirstMessage() {
@@ -296,39 +305,6 @@ export class MicdropServer {
     }
 
     // Run TTS
-    const audio = this.config.tts.speak(textStream)
-
-    // Send audio to client
-    await this._sendAudio(audio)
-  }
-
-  public sendAudio(audio: Readable) {
-    this.queueOperation(async () => {
-      await this._sendAudio(audio)
-    })
-  }
-
-  private async _sendAudio(audio: Readable) {
-    if (!this.socket) return
-    if (!audio.readable) {
-      this.log('Non readable audio, skipping', audio)
-      return
-    }
-
-    // Wait for audio stream to complete
-    await new Promise<void>((resolve, reject) => {
-      audio.on('data', (chunk) => {
-        this.log(`Send audio chunk (${chunk.byteLength} bytes)`)
-        this.socket?.send(chunk)
-      })
-      audio.on('error', (error) => {
-        this.log('Error in audio stream', error)
-        reject(error)
-      })
-      audio.on('end', () => {
-        this.log('Audio stream ended')
-        resolve()
-      })
-    })
+    this.config.tts.speak(textStream)
   }
 }

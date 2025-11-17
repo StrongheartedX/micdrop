@@ -14,19 +14,22 @@ export interface GladiaSTTOptions {
   settings?: DeepPartial<GladiaLiveSessionPayload>
   transcriptionTimeout?: number
   retryDelay?: number
+  maxRetry?: number
 }
 
 const SAMPLE_RATE = 16000
 const BIT_DEPTH = 16
 const DEFAULT_TRANSCRIPTION_TIMEOUT = 4000
 const DEFAULT_RETRY_DELAY = 1000
+const DEFAULT_MAX_RETRY = 3
 
 export class GladiaSTT extends STT {
   private socket?: WebSocket
   private initPromise: Promise<void>
   private reconnectTimeout?: NodeJS.Timeout
   private transcriptionTimeout?: NodeJS.Timeout
-  private audioChunksPending: ArrayBuffer[] = [] // Store audio chunks to send them again if reconnecting
+  private audioChunksPending: Buffer[] = [] // Store audio chunks to send them again if reconnecting
+  private retryCount = 0
 
   constructor(private options: GladiaSTTOptions) {
     super()
@@ -42,9 +45,9 @@ export class GladiaSTT extends STT {
 
   transcribe(audioStream: Readable) {
     // Read transformed stream and send to Gladia
-    audioStream.on('data', async (chunk) => {
-      await this.initPromise
+    audioStream.on('data', async (chunk: Buffer) => {
       this.audioChunksPending.push(chunk)
+      await this.initPromise
       this.socket?.send(chunk)
       this.log(`Sent audio chunk (${chunk.byteLength} bytes)`)
     })
@@ -177,6 +180,13 @@ export class GladiaSTT extends STT {
   }
 
   private reconnect() {
+    this.retryCount++
+    if (this.retryCount > (this.options.maxRetry ?? DEFAULT_MAX_RETRY)) {
+      this.log('Max retries reached, giving up')
+      this.emit('Failed', this.audioChunksPending)
+      return
+    }
+
     this.initPromise = new Promise((resolve) => {
       this.log('Reconnecting...')
       this.reconnectTimeout = setTimeout(() => {
@@ -184,6 +194,8 @@ export class GladiaSTT extends STT {
         this.getURL()
           .then(this.initWS)
           .then(() => {
+            this.retryCount = 0
+
             // Send audio chunks again if reconnecting during transcription
             if (this.audioChunksPending.length > 0) {
               this.log('Sending audio chunks again')
@@ -207,7 +219,7 @@ export class GladiaSTT extends STT {
     const bytesPerSample = BIT_DEPTH / 8
     const silenceBuffer = Buffer.alloc(numSamples * bytesPerSample)
     this.socket.send(silenceBuffer)
-    this.audioChunksPending.push(silenceBuffer.buffer)
+    this.audioChunksPending.push(silenceBuffer)
     this.log(
       `Sent ${durationSeconds * 1000}ms of silence (${silenceBuffer.byteLength} bytes) after stream end`
     )

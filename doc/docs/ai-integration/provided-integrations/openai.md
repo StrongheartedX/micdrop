@@ -139,4 +139,5 @@ new MicdropServer(socket, {
 | `language`             | `string` | `'en'`                                          | Language code for transcription                          |
 | `prompt`               | `string` | `'Transcribe the incoming audio in real time.'` | Custom prompt to guide transcription behavior            |
 | `transcriptionTimeout` | `number` | `4000`                                          | Timeout in milliseconds to wait for transcription result |
-| `retryDelay`           | `number` | `500`                                           | Delay in milliseconds between reconnection attempts      |
+| `retryDelay`           | `number` | `1000`                                          | Delay in milliseconds between reconnection attempts      |
+| `maxRetry`             | `number` | `3`                                             | Maximum number of reconnection attempts before failing   |

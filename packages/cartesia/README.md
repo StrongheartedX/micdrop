@@ -20,7 +20,7 @@ import { MicdropServer } from '@micdrop/server'
 
 const tts = new CartesiaTTS({
   apiKey: process.env.CARTESIA_API_KEY || '',
-  modelId: 'sonic-english', // Cartesia model ID
+  modelId: 'sonic-turbo', // Cartesia model ID
   voiceId: 'a0e99841-438c-4a64-b679-ae501e7d6091', // Voice ID
   language: 'en', // Optional: specify language
   speed: 'normal', // Optional: speech speed

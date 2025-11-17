@@ -1,10 +1,16 @@
+import { EventEmitter } from 'eventemitter3'
 import { Readable } from 'stream'
 import { Logger } from '../Logger'
 
-export abstract class TTS {
+export interface TTSEvents {
+  Audio: [Buffer]
+  Failed: [string[]]
+}
+
+export abstract class TTS extends EventEmitter<TTSEvents> {
   public logger?: Logger
 
-  abstract speak(textStream: Readable): Readable
+  abstract speak(textStream: Readable): void
   abstract cancel(): void
 
   protected log(...message: any[]) {

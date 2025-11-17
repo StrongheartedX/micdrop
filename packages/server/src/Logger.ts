@@ -1,5 +1,5 @@
 export class Logger {
-  constructor(private readonly name: string) {}
+  constructor(public name: string) {}
 
   log(...message: any[]) {
     const time = process.uptime().toFixed(3)

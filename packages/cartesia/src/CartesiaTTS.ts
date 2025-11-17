@@ -1,5 +1,5 @@
 import { TTS } from '@micdrop/server'
-import { PassThrough, Readable } from 'stream'
+import { Readable } from 'stream'
 import WebSocket from 'ws'
 import {
   CartesiaCancelPayload,
@@ -15,16 +15,19 @@ export interface CartesiaTTSOptions {
   language?: CartesiaLanguage
   speed?: 'fast' | 'normal' | 'slow'
   retryDelay?: number
+  maxRetry?: number
 }
 
 const DEFAULT_RETRY_DELAY = 1000
-
+const DEFAULT_MAX_RETRY = 3
 export class CartesiaTTS extends TTS {
   private socket?: WebSocket
   private initPromise: Promise<void>
   private counter = 0
-  private audioStream?: PassThrough
+  private isProcessing = false
   private reconnectTimeout?: NodeJS.Timeout
+  private textSent: string = '' // Store text chunks to send them again if reconnecting
+  private retryCount = 0
 
   constructor(private readonly options: CartesiaTTSOptions) {
     super()
@@ -40,42 +43,30 @@ export class CartesiaTTS extends TTS {
     this.counter++
     const counter = this.counter
     const context_id = counter.toString()
-    this.stopStreams()
-    this.audioStream = new PassThrough()
+    this.isProcessing = true
+    this.textSent = ''
 
-    const config = {
-      model_id: this.options.modelId,
-      voice: {
-        mode: 'id',
-        id: this.options.voiceId,
-      },
-      output_format: {
-        container: 'raw',
-        encoding: 'pcm_s16le',
-        sample_rate: 16000,
-      },
-      language: this.options.language,
-      speed: this.options.speed,
-    } as const
-
-    textStream.on('data', async (chunk) => {
+    textStream.on('data', async (chunk: Buffer) => {
       if (counter !== this.counter) return
+      const text = chunk.toString('utf-8').replace(/[\r\n ]+/g, ' ')
+      this.textSent += text
+
       await this.initPromise
-      const transcript = chunk.toString('utf-8')
+
       this.socket?.send(
         JSON.stringify({
-          ...config,
-          transcript,
+          ...this.getConfig(),
+          transcript: text,
           context_id,
           continue: true,
         } satisfies CartesiaPayload)
       )
-      this.log(`Sent transcript: "${transcript}"`)
+      this.log(`Sent transcript: "${text}"`)
     })
 
     textStream.on('error', (error) => {
       this.log('Error in text stream, ending audio stream', error)
-      this.stopStreams()
+      this.isProcessing = false
     })
 
     textStream.on('end', async () => {
@@ -83,21 +74,20 @@ export class CartesiaTTS extends TTS {
       await this.initPromise
       this.socket?.send(
         JSON.stringify({
-          ...config,
+          ...this.getConfig(),
           transcript: '',
           context_id,
           continue: false,
         } satisfies CartesiaPayload)
       )
     })
-
-    return this.audioStream
   }
 
   cancel() {
-    if (!this.audioStream) return
+    if (!this.isProcessing) return
     this.log('Cancel')
-    this.stopStreams()
+    this.isProcessing = false
+    this.textSent = ''
 
     // Signal Cartesia to stop sending data
     this.socket?.send(
@@ -122,12 +112,24 @@ export class CartesiaTTS extends TTS {
       this.socket?.close(1000)
     }
     this.socket = undefined
-    this.stopStreams()
+    this.isProcessing = false
   }
 
-  private stopStreams() {
-    this.audioStream?.end()
-    this.audioStream = undefined
+  private getConfig() {
+    return {
+      model_id: this.options.modelId,
+      voice: {
+        mode: 'id',
+        id: this.options.voiceId,
+      },
+      output_format: {
+        container: 'raw',
+        encoding: 'pcm_s16le',
+        sample_rate: 16000,
+      },
+      language: this.options.language,
+      speed: this.options.speed,
+    } as const
   }
 
   // Connect to Cartesia
@@ -150,8 +152,7 @@ export class CartesiaTTS extends TTS {
       socket.addEventListener('close', ({ code, reason }) => {
         this.socket?.removeAllListeners()
         this.socket = undefined
-        this.audioStream?.end()
-        this.audioStream = undefined
+        this.isProcessing = false
 
         if (code !== 1000) {
           this.reconnect()
@@ -171,12 +172,12 @@ export class CartesiaTTS extends TTS {
             case 'chunk':
               const chunk = Buffer.from(message.data, 'base64')
               this.log(`Received audio chunk (${chunk.length} bytes)`)
-              this.audioStream?.write(chunk)
+              this.emit('Audio', chunk)
               break
             case 'done':
               this.log('Audio ended')
-              this.audioStream?.end()
-              this.audioStream = undefined
+              this.isProcessing = false
+              this.textSent = ''
               break
             case 'error':
               this.log('Error', message.error)
@@ -190,11 +191,34 @@ export class CartesiaTTS extends TTS {
   }
 
   private reconnect() {
+    this.retryCount++
+    if (this.retryCount > (this.options.maxRetry ?? DEFAULT_MAX_RETRY)) {
+      this.log('Max retries reached, giving up')
+      this.emit('Failed', [this.textSent])
+      return
+    }
+
     this.initPromise = new Promise((resolve) => {
       this.log('Reconnecting...')
       this.reconnectTimeout = setTimeout(() => {
         this.reconnectTimeout = undefined
         this.initWS()
+          .then(() => {
+            this.retryCount = 0
+
+            // Send text chunks again if reconnecting
+            if (this.textSent.length > 0) {
+              this.log('Sending text chunks again')
+              this.socket?.send(
+                JSON.stringify({
+                  ...this.getConfig(),
+                  transcript: this.textSent,
+                  context_id: this.counter.toString(),
+                  continue: true,
+                } satisfies CartesiaPayload)
+              )
+            }
+          })
           .then(resolve)
           .catch((error) => {
             this.log('Reconnection error:', error)

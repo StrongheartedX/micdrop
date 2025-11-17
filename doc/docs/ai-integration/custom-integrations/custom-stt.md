@@ -8,6 +8,8 @@ The `STT` class is the core abstraction for speech-to-text functionality in Micd
 - [GladiaSTT](https://github.com/lonestone/micdrop/blob/main/packages/gladia/src/GladiaSTT.ts) from [@micdrop/gladia](../provided-integrations/gladia)
 - [MockSTT](https://github.com/lonestone/micdrop/blob/main/packages/server/src/stt/MockSTT.ts) for testing
 
+For automatic failover between multiple STT providers, see [FallbackSTT](../fallback-strategies/stt-fallback).
+
 ## Overview
 
 The `STT` class is an abstract base class that extends `EventEmitter` and manages:
@@ -20,7 +22,6 @@ The `STT` class is an abstract base class that extends `EventEmitter` and manage
 
 ```typescript
 export abstract class STT extends EventEmitter<STTEvents> {
-  protected mimeType?: keyof typeof MIME_TYPE_TO_EXTENSION
   public logger?: Logger
 
   // Transcribe audio stream to text (emits Transcript event)
@@ -33,7 +34,7 @@ export abstract class STT extends EventEmitter<STTEvents> {
 
 ## Events
 
-The STT class emits one primary event:
+The STT class emits the following events:
 
 ### Transcript
 
@@ -42,6 +43,17 @@ Emitted when a transcription is ready.
 ```typescript
 stt.on('Transcript', (text: string) => {
   console.log('Transcript:', text)
+})
+```
+
+### Failed
+
+Emitted when the STT service fails after exhausting all retries. This event provides the buffered audio chunks that were pending transcription.
+
+```typescript
+stt.on('Failed', (audioChunks: Buffer[]) => {
+  console.error('STT failed with', audioChunks.length, 'pending audio chunks')
+  // Handle failure (e.g., notify user, fallback to another STT)
 })
 ```
 
