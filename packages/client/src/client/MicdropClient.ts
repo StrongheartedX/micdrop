@@ -599,8 +599,8 @@ export class MicdropClient
     this.log('Speaker started')
     if (this.options.disableInterruption) {
       this.vad?.pause()
-      this.notifyStateChange()
     }
+    this.notifyStateChange()
   }
 
   private onSpeakerStopPlaying = () => {
@@ -613,6 +613,8 @@ export class MicdropClient
         }
         // Wait a bit to avoid recording the speaker output
       }, 200)
+    } else {
+      this.notifyStateChange()
     }
   }
 

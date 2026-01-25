@@ -21,7 +21,7 @@ export class VolumeVAD extends VAD {
   private _isPaused = false
   private analyser: AnalyserNode | undefined
   private sourceNode: MediaStreamAudioSourceNode | undefined
-  private fftBins: Float32Array | undefined
+  private fftBins: Float32Array<ArrayBuffer> | undefined
   private running: boolean = false
   private speaking: boolean = false
   private attemptSpeaking: boolean = false

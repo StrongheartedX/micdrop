@@ -55,17 +55,27 @@ export class SileroVAD extends VAD {
     if (this.vad) return
 
     this.vad = await MicVAD.new({
-      stream,
+      getStream: async () => stream,
+      pauseStream: async () => {},
+      resumeStream: async () => stream,
       model: 'v5',
       submitUserSpeechOnPause: true,
       baseAssetPath:
         'https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@latest/dist/',
       onnxWASMBasePath:
         'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.2/dist/',
-      onSpeechStart: () => this.emit('StartSpeaking'),
-      onSpeechRealStart: () => this.emit('ConfirmSpeaking'),
-      onVADMisfire: () => this.emit('CancelSpeaking'),
-      onSpeechEnd: () => this.emit('StopSpeaking'),
+      onSpeechStart: () => {
+        this.emit('StartSpeaking')
+      },
+      onSpeechRealStart: () => {
+        this.emit('ConfirmSpeaking')
+      },
+      onVADMisfire: () => {
+        this.emit('CancelSpeaking')
+      },
+      onSpeechEnd: () => {
+        this.emit('StopSpeaking')
+      },
       ...this.options,
     })
 
